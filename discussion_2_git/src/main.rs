@@ -1,9 +1,9 @@
 fn parity(x: i64) -> i64 {
-    return 0; // Change this line
+    return x % 2; // Change this line
 }
 
 fn add(a: i64, b: i64) -> i64{
-    return 0; // Change this line
+    return a+ b; // Change this line
 }
 
 fn main() {
