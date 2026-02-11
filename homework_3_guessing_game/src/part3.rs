@@ -123,10 +123,11 @@ mod bad_strategy_tests {
     }
 
     #[test]
+    #[should_panic]
     fn a_different_number() {
         let min = 0;
         let max = 100;
-        let number = todo!("`the_min` and `the_max` are not enough: the `BadStrategy` satisfies them, even though it is wrong. Add your own test that demonstrate that BadStrategy does not work!");
+        let number = 50;
 
         // We create a simulated player
         let mut player = Player::new(SimulatedPlayer::new(number));
