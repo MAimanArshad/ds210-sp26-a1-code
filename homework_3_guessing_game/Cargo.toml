@@ -1,0 +1,17 @@
+[package]
+name = "homework_3_guessing_game"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "game"
+path = "src/game.rs"
+
+[[bin]]
+name = "experiment"
+path = "src/experiment.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+plotters = "0.3.7"
+rand = "0.10.0"
