@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "malloc",
+    "fixed",
+    "tracker",
+    "slow_vec",
+    "fast_vec",
+]
