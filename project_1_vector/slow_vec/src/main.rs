@@ -19,7 +19,7 @@ fn fixed_sized_array() {
 
     // Can we call move many times? try it out and see for yourself.
     println!("{}", array.move_out(0));
-    // println!("{}", array.move_out(0));
+    //println!("{}", array.move_out(0));
 
     // Try other things!
     // What happens if you try to put or get things out of the range?
@@ -77,13 +77,13 @@ fn slow_vec_remove() {
 }
 
 fn main() {
-    // This part works as given.
+   // This part works as given.
     slow_vec_basics();
 
     // This part helps you understand how to use FixedSizeArray
     fixed_sized_array();
 
     // These parts do not work unless you implement push and remove correctly.
-    slow_vec_push();
     slow_vec_remove();
+    slow_vec_push();
 }
