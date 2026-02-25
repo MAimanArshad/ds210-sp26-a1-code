@@ -61,6 +61,10 @@ impl Tracker {
             println!("");
         }
     }
+
+    pub fn tracked_count(&self) -> usize {
+        return self.map.len();
+    }
 }
 
 

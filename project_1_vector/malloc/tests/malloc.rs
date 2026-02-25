@@ -11,3 +11,10 @@ fn test_malloc() {
 
     MALLOC.free(ptr);
 }
+
+#[test]
+fn test_malloc2() {
+    let ptr = MALLOC.malloc(0);
+    assert!(!ptr.is_null());
+    MALLOC.free(ptr);
+}

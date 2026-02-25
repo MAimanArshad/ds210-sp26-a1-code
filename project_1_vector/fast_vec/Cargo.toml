@@ -7,8 +7,23 @@ edition = "2024"
 name = "fast_vec"
 path = "src/lib.rs"
 
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[[bin]]
+name = "memory"
+path = "src/memory.rs"
+
+[[bin]]
+name = "experiment"
+path = "src/experiment.rs"
+
 [dependencies]
 malloc = { path = "../malloc" }
+tracker = { path = "../tracker" }
+plotters = "0.3.7"
+slow_vec = { path = "../slow_vec" }
 
 [dev-dependencies]
 rand = "0.10.0"
