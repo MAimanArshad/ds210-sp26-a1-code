@@ -75,7 +75,18 @@ impl<T> FastVec<T> {
 
     // Student 1 should implement this.
     pub fn remove(&mut self, i: usize) {
-        todo!("implement remove");
+        if i >= self.len {
+            panic!("FastVec: remove out of bounds");
+        }
+        let delete = self.get(i);
+        unsafe{
+        ptr::read(delete);
+        for j in i+1..self.len{
+            let pointer_to_fill = self.ptr_to_data.add(j - 1);
+            ptr::write(pointer_to_fill, ptr::read(self.get(j) as *const T));
+        }
+        self.len -= 1;
+        }
     }
 
     // This appears correct but with further testing, you will notice it has a bug!
