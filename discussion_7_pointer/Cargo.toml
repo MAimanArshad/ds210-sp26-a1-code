@@ -1,0 +1,18 @@
+[package]
+name = "example"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+path = "src/example1.rs"
+name = "example1"
+
+[[bin]]
+path = "src/example2.rs"
+name = "example2"
+
+[[bin]]
+path = "src/example3.rs"
+name = "example3"
+
+[dependencies]
