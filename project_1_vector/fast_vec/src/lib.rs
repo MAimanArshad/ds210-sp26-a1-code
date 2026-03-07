@@ -119,6 +119,11 @@ impl<T> FastVec<T> {
     // Hint: check out case 2 in memory.rs, which you can run using
     //       cargo run --bin memory
     pub fn clear(&mut self) {
+        for i in 0..self.len {
+        unsafe {
+            std::ptr::drop_in_place(self.ptr_to_data.add(i));
+            }
+        }
         MALLOC.free(self.ptr_to_data as *mut u8);
         self.ptr_to_data = null_mut();
         self.len = 0;
