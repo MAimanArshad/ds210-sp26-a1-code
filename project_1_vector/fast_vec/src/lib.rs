@@ -90,6 +90,7 @@ impl<T> FastVec<T> {
             }
             self.capacity = new_capacity;
         } else {
+            //Wrties new element when FastVec isn't full
             unsafe {
                 std::ptr::write(self.ptr_to_data.add(self.len), t);
             }
