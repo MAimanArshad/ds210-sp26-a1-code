@@ -72,11 +72,29 @@ impl<T> FastVec<T> {
 
     // Student 2 should implement this.
     pub fn push(&mut self, t: T) {
+        //Allocates more memory when FastVec is full
         if self.len == self.capacity {
-            todo!("implement growing the vector by doubling the size!");
+            let new_capacity = if self.capacity == 0 {
+                1} 
+            else {
+                self.capacity * 2};
+            let new_ptr = MALLOC.malloc(new_capacity * std::mem::size_of::<T>()) as *mut T;
+            //Copies old data to new memory and frees old memory
+            unsafe {
+                for i in 0..self.len {
+                    std::ptr::write(new_ptr.add(i), self.ptr_to_data.add(i).read());
+                }
+                MALLOC.free(self.ptr_to_data as *mut u8);
+                self.ptr_to_data = new_ptr;
+                std::ptr::write(new_ptr.add(self.len), t);
+            }
+            self.capacity = new_capacity;
         } else {
-            todo!("implement pushing t directly since the vector still has capacity!");
+            unsafe {
+                std::ptr::write(self.ptr_to_data.add(self.len), t);
+            }
         }
+        self.len += 1;   
     }
 
     // Student 1 should implement this.
