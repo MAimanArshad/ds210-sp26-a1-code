@@ -121,7 +121,7 @@ impl<T> FastVec<T> {
     pub fn clear(&mut self) {
         for i in 0..self.len {
         unsafe {
-            std::ptr::drop_in_place(self.ptr_to_data.add(i));
+            ptr::read(self.ptr_to_data.add(i));
             }
         }
         MALLOC.free(self.ptr_to_data as *mut u8);
