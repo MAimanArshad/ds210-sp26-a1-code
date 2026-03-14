@@ -98,7 +98,7 @@
 
             // Parse response.
             const response = this.responseText;
-            const messages = JSON.parse(response).message;
+            const messages = JSON.parse(response);
 
             // Show response in UI.
             const chatPanel = document.getElementById('chat-panel');
