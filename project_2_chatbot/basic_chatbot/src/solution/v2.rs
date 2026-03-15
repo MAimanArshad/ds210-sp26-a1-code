@@ -10,7 +10,10 @@ impl ChatbotV2 {
     #[allow(dead_code)]
     pub fn new(model: Llama) -> ChatbotV2 {
         let chat_session = model.chat();
-        return ChatbotV2 {model, chat_session}
+        return ChatbotV2 {
+            model,
+            chat_session
+        }
     }
 
     #[allow(dead_code)]
