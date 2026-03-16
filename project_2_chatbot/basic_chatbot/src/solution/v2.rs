@@ -13,6 +13,9 @@ impl ChatbotV2 {
         return ChatbotV2 {
             model,
             chat_session
+            //model: model.clone(),
+            //chat_session: model
+                //.chat()  
         }
     }
 
