@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate rocket;
 
-use basic_chatbot::{solution, stencil};
+use file_chatbot::{solution, stencil};
 
 // This is the main function (kindof)
 // The actual main function is generated automatically by the

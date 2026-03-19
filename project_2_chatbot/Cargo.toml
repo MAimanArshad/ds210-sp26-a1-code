@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "basic_chatbot",
+    "file_chatbot",
+    "cache_chatbot",
+    "experiments",
+]
+
