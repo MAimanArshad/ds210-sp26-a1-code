@@ -81,7 +81,12 @@ pub async fn chat_with_user(&mut self, username: String, message: String) -> Str
                         return Vec::new();
                     },
                     Some(session) => {
-                        let history = session.history().iter().map(|msg| msg.content().to_string()).collect();
+                        let history = session
+                            .history()
+                            .iter()
+                            .filter(|msg| matches!(msg.role(), MessageType::UserMessage | MessageType::ModelAnswer))
+                            .map(|msg| msg.content().to_string())
+                            .collect();
                         let chat = self.model.chat().with_session(session);
                         self.cache.insert_chat(username, chat);
                         return history;
@@ -94,6 +99,7 @@ pub async fn chat_with_user(&mut self, username: String, message: String) -> Str
                     Ok(session) => session
                         .history()
                         .iter()
+                        .filter(|msg| matches!(msg.role(), MessageType::UserMessage | MessageType::ModelAnswer))
                         .map(|msg| msg.content().to_string())
                         .collect::<Vec<String>>(),
                     Err(r) => Vec::new(),

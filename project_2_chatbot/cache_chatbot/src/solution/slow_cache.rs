@@ -40,7 +40,7 @@ impl<V> Cache<V> {
     println!("Removing least recently used");
     }
 
-    }
+    
     fn mark_as_most_recently_used(&mut self, username: String) {
         if self.usage_history.contains(&username) {
             self.usage_history.retain(|x| x != &username);
