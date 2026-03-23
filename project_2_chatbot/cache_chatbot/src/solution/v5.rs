@@ -41,28 +41,31 @@ impl ChatbotV5 {
 
         match cached_chat {
             None => {
-                println!("get_history: {username} is not in the cache!");
+            println!("get_history: {username} is not in the cache!");
                 match file_library::load_chat_session_from_file(filename) {
                     None => {
+                        let chat = self.model.chat();
+                        self.cache.insert_chat(username, chat);
                         return Vec::new();
-                        },
+                    },
                     Some(session) => {
                         let history = session.history().iter().map(|msg| msg.content().to_string()).collect();
                         let chat = self.model.chat().with_session(session);
                         self.cache.insert_chat(username, chat);
                         return history;
-                        }
+                    }
                 }
             }
             Some(chat_session) => {
                 println!("get_history: {username} is in the cache! Nice!");
-                return chat_session
-                .session()
-                .unwrap()
-                .history()
-                .into_iter()
-                .map(|msg| msg.content().to_string())
-                .collect::<Vec<String>>();
+                match chat_session.session() {
+                    Ok(session) => session
+                        .history()
+                        .iter()
+                        .map(|msg| msg.content().to_string())
+                        .collect::<Vec<String>>(),
+                    Err(r) => Vec::new(),
+                }
             }
         }
     }
