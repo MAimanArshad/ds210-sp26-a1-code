@@ -34,8 +34,7 @@ impl<V> Cache<V> {
     fn remove_least_recently_used(&mut self) {
     if self.usage_history.is_empty() {
         return;
-    }
-
+        }
     let least_recently_used = self.usage_history.remove(0);
     self.hashmap.remove(&least_recently_used);
     println!("Removing least recently used");
