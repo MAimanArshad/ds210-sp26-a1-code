@@ -40,7 +40,7 @@ impl<V> Cache<V> {
     self.hashmap.remove(&least_recently_used);
     println!("Removing least recently used");
     }
-    
+
     }
     fn mark_as_most_recently_used(&mut self, username: String) {
         // TODO: your code goes here.
