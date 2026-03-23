@@ -1,15 +1,19 @@
 [package]
-name = "basic_chatbot"
+name = "cache_chatbot"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "basic_chatbot"
+name = "cache_chatbot"
 path = "src/lib.rs"
 
 [[bin]]
 name = "bin"
 path = "src/main.rs"
+
+[[bin]]
+name = "slow_cache"
+path = "src/solution/slow_cache.rs"
 
 [dependencies]
 kalosm = { version = "0.4.0", features = ["language", "llama"] }
@@ -17,8 +21,8 @@ rocket = {  version = "0.5.1", features = ["json"] }
 rocket_cors = "0.6.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1"
+file_chatbot = { path = "../file_chatbot" }
+lru = "0.16.3"
 
 [features]
-v1 = []
-v2 = []
-v3 = []
+slow_cache = []
