@@ -2,6 +2,29 @@ use std::collections::HashMap;
 use crate::dataset::{ColumnType, Dataset, Value, Row};
 use crate::query::{Aggregation, Condition, Query};
 
+pub fn row_match_condition(row: &Row, condition: &Condition) -> bool {
+    //Helper function to check if a row matches a condition
+    match condition {
+        Condition::Equal(column, expected_value) => {
+            let index = column.parse().unwrap();
+            return row.get_value(index) == expected_value;
+        }
+        Condition::Not(inner_condition) => {
+            return !row_match_condition(row, inner_condition);
+        }
+        Condition::And(left_condition, right_condition) => {
+            return row_match_condition(row, left_condition) && row_match_condition(row, right_condition);
+        }
+        Condition::Or(left_condition, right_condition) => {
+            return row_match_condition(row, left_condition) || row_match_condition(row, right_condition);
+        }
+    }
+}
+   
+
+
+    
+
 pub fn filter_dataset(dataset: &Dataset, filter: &Condition) -> Dataset {
     todo!("Implement this!");
 }

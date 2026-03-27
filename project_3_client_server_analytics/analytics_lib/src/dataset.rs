@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use crate::query::Condition;
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ColumnType {
     String,
