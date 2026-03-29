@@ -2,31 +2,54 @@ use std::collections::HashMap;
 use crate::dataset::{self, ColumnType, Dataset, Row, Value};
 use crate::query::{Aggregation, Condition, Query};
 
-pub fn row_match_condition(row: &Row, dataset: &Dataset, condition: &Condition) -> bool {
-    //Helper function to check if a row matches a condition
+fn row_matches_condition(dataset: &Dataset, row: &Row, condition: &Condition) -> bool {
     match condition {
-        Condition::Equal(column, expected_value) => {
-            let index = dataset.column_index(column);
-            return row.get_value(index) == expected_value;
+        Condition::Equal(column_name, expected_value) => {
+            let column_index = dataset.column_index(column_name);
+            row.get_value(column_index) == expected_value
         }
         Condition::Not(inner_condition) => {
-            return !row_match_condition(row, dataset, inner_condition);
+            !row_matches_condition(dataset, row, inner_condition)
         }
         Condition::And(left_condition, right_condition) => {
-            return row_match_condition(row, dataset, left_condition) && row_match_condition(row, dataset, right_condition);
+            row_matches_condition(dataset, row, left_condition)
+                && row_matches_condition(dataset, row, right_condition)
         }
         Condition::Or(left_condition, right_condition) => {
-            return row_match_condition(row, dataset, left_condition) || row_match_condition(row, dataset, right_condition);
+            row_matches_condition(dataset, row, left_condition)
+                || row_matches_condition(dataset, row, right_condition)
         }
     }
 }
 
 pub fn filter_dataset(dataset: &Dataset, filter: &Condition) -> Dataset {
-    todo!("Implement this!");
+    let mut filtered_dataset = Dataset::new(dataset.columns().clone());
+
+    for row in dataset.iter() {
+        if row_matches_condition(dataset, row, filter) {
+            filtered_dataset.add_row(row.clone());
+        }
+    }
+
+    return filtered_dataset;
 }
 
 pub fn group_by_dataset(dataset: Dataset, group_by_column: &String) -> HashMap<Value, Dataset> {
-    todo!("Implement this!");
+    let group_by_index = dataset.column_index(group_by_column);
+    let columns = dataset.columns().clone();
+
+    let mut grouped: HashMap<Value, Dataset> = HashMap::new();
+
+    for row in dataset.into_iter() {
+        let group_value = row.get_value(group_by_index).clone();
+
+        grouped
+            .entry(group_value)
+            .or_insert_with(|| Dataset::new(columns.clone()))
+            .add_row(row);
+    }
+
+    return grouped;
 }
 
 pub fn aggregate_dataset(dataset: HashMap<Value, Dataset>, aggregation: &Aggregation) -> HashMap<Value, Value> {
