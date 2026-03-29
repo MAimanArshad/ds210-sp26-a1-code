@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::dataset::{ColumnType, Dataset, Value, Row};
+use crate::dataset::{self, ColumnType, Dataset, Row, Value};
 use crate::query::{Aggregation, Condition, Query};
 
 fn row_matches_condition(dataset: &Dataset, row: &Row, condition: &Condition) -> bool {
@@ -53,7 +53,45 @@ pub fn group_by_dataset(dataset: Dataset, group_by_column: &String) -> HashMap<V
 }
 
 pub fn aggregate_dataset(dataset: HashMap<Value, Dataset>, aggregation: &Aggregation) -> HashMap<Value, Value> {
-    todo!("Implement this!");
+    let mut result = HashMap::new();
+    for (grouped_value, dataset) in dataset {
+        match aggregation {
+            Aggregation::Count(column_name) => {
+                result.insert(grouped_value, Value::Integer(dataset.len() as i32));
+            }
+            Aggregation::Sum(column_name) => {
+                let index = dataset.column_index(column_name);
+                let mut sum = 0;
+                for row in dataset.iter() {
+                    match row.get_value(index) {
+                        Value::Integer(value) => sum += value,
+                        _ => panic!("Cannot sum non-integer value!"),
+                    }
+                }
+                result.insert(grouped_value, Value::Integer(sum));
+            }
+            Aggregation::Average(column_name) => {
+                let index = dataset.column_index(column_name);
+                let mut sum = 0;
+                let mut count = 0;
+                for row in dataset.iter() {
+                    match row.get_value(index) {
+                        Value::Integer(value) => {
+                            sum += value;
+                            count += 1;
+                        }
+                        _ => panic!("Cannot average non-integer value!"),
+                    }
+                }
+                if count == 0 {
+                    result.insert(grouped_value, Value::Integer(0));
+                } else {
+                    result.insert(grouped_value, Value::Integer(sum / count));
+                }
+            }
+        }
+    }
+    return result;
 }
 
 pub fn compute_query_on_dataset(dataset: &Dataset, query: &Query) -> Dataset {
