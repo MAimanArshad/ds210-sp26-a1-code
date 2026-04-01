@@ -3,4 +3,24 @@ name = "client"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[[bin]]
+name = "bonus"
+path = "src/bonus.rs"
+
 [dependencies]
+tarpc = { version = "0.37", features = ["full", "serde-transport", "tokio-serde"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+analytics_lib = { path = "../analytics_lib" }
+interface = { path = "../interface" }
+futures = "0.3.32"
