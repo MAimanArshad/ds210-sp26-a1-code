@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tarpc = { version = "0.37", features = ["full", "serde-transport", "tokio-serde"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+analytics_lib = { path = "../analytics_lib" }
+interface = { path = "../interface" }
+futures = "0.3.32"
