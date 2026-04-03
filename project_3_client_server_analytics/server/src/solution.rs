@@ -1,4 +1,4 @@
-use analytics_lib::{dataset::Dataset, query::Query};
+use analytics_lib::{dataset::Dataset, query::Query, solution::compute_query_on_dataset};
 
 pub fn hello() -> String {
     println!("hello called");
@@ -12,5 +12,5 @@ pub fn slow_rpc(input_dataset: &Dataset) -> Dataset {
 
 pub fn fast_rpc(input_dataset: &Dataset, query: Query) -> Dataset {
     println!("fast_rpc called");
-    todo!("Implement this");
+    return compute_query_on_dataset(input_dataset, &query);
 }
