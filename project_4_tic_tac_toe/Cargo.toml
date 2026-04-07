@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "tic_tac_toe_3x3",
+    "tic_tac_toe_5x5",
+    "tic_tac_toe_stencil",
+]
+

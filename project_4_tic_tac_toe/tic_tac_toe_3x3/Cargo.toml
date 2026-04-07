@@ -1,0 +1,12 @@
+[package]
+name = "tic_tac_toe_3x3"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5.8", features = ["derive"] }
+tic_tac_toe_stencil = { path = "../tic_tac_toe_stencil" }

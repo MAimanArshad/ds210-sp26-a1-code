@@ -1,0 +1,14 @@
+[package]
+name = "tic_tac_toe_stencil"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "tic_tac_toe_stencil"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.8"
+
+[target.'cfg(not(windows))'.dependencies]
+termion = "4.0.2"
