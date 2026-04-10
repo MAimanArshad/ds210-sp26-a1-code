@@ -24,7 +24,7 @@ fn invoke_agent<A: SealedAgent>(mut board: Board, player: Player, time_limit: u6
     let handler = thread::spawn(move || {
         let timer = SystemTime::now();
 
-        let (_, row, col) = A::solve(&mut board, player);
+        let (_, row, col) = A::solve(&mut board, player, time_limit);
 
         let elapsed = timer.elapsed().unwrap();
         let time_in_seconds = (elapsed.as_millis() as f32) / 1000.0;
