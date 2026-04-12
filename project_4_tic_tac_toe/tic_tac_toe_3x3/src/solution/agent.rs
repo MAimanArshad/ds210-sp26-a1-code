@@ -17,13 +17,14 @@ impl Agent for SolutionAgent {
             return (board.score(), 0, 0);
         }
         else {
-            //ST1
-        //}
+            todo!("st1")
+        }
         if player == Player::X {
-            return scored.into_iter().max_by_key(|x|x.0).unwrap();
+            return scored.into_iter().max_by_key(|x|, x.0).unwrap();
         }
         else {
-            return scored.into_iter().min_by_key(|x|x.0).unwrap();
+            return scored.into_iter().min_by_key(|x|, x.0).unwrap();
         }
+
     }
 }
