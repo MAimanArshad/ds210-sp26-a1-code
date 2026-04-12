@@ -5,13 +5,13 @@ use crate::player::Player;
 // Agent trait that students will implement for their solutions.
 pub trait Agent {
     // Must return (score, x coordinate of move, y coordinate of move).
-    fn solve(board: &mut Board, player: Player) -> (i32, usize, usize);
+    fn solve(board: &mut Board, player: Player, time_limit: u64) -> (i32, usize, usize);
 }
 
 // A dumb solution that makes the first possible move.
 pub struct FirstMoveAgent {}
 impl Agent for FirstMoveAgent {
-    fn solve(board: &mut Board, _player: Player) -> (i32, usize, usize) {
+    fn solve(board: &mut Board, _player: Player, _time_limit: u64) -> (i32, usize, usize) {
         let moves = board.moves();
         return (0, moves[0].0, moves[0].1);
     }
@@ -20,7 +20,7 @@ impl Agent for FirstMoveAgent {
 // A dumb solution that makes moves randomly.
 pub struct RandomAgent {}
 impl Agent for RandomAgent {
-    fn solve(board: &mut Board, _player: Player) -> (i32, usize, usize) {
+    fn solve(board: &mut Board, _player: Player, _time_limit: u64) -> (i32, usize, usize) {
         use rand::Rng;
 
         let moves = board.moves();
@@ -32,7 +32,7 @@ impl Agent for RandomAgent {
 // Slightly better solution based on a heuristic but without any min-max.
 pub struct TestAgent {}
 impl Agent for TestAgent {
-    fn solve(board: &mut Board, player: Player) -> (i32, usize, usize) {
+    fn solve(board: &mut Board, player: Player, _time_limit: u64) -> (i32, usize, usize) {
         let moves = board.moves();
 
         // Assume first move is best move for now.
@@ -70,7 +70,7 @@ impl Agent for TestAgent {
 // Agent that just prompts users to play the game via the terminal.
 pub struct ManualAgent {}
 impl ManualAgent {
-    pub fn solve(board: &mut Board, _player: Player) -> (i32, usize, usize) {
+    pub fn solve(board: &mut Board, _player: Player, _time_limit: u64) -> (i32, usize, usize) {
         let cells = board.get_cells();
 
         println!("");
@@ -129,16 +129,16 @@ mod sealed {
 // Public sealed trait.
 pub trait SealedAgent: sealed::SealedAgentTrait {
     fn manual() -> bool { false }
-    fn solve(board: &mut Board, player: Player) -> (i32, usize, usize);
+    fn solve(board: &mut Board, player: Player, _time_limit: u64) -> (i32, usize, usize);
 }
 impl SealedAgent for ManualAgent {
     fn manual() -> bool { true }
-    fn solve(board: &mut Board, player: Player) -> (i32, usize, usize) {
-        ManualAgent::solve(board, player)
+    fn solve(board: &mut Board, player: Player, _time_limit: u64) -> (i32, usize, usize) {
+        ManualAgent::solve(board, player, _time_limit)
     }
 }
 impl<A: Agent> SealedAgent for A {
-    fn solve(board: &mut Board, player: Player) -> (i32, usize, usize) {
-        A::solve(board, player)
+    fn solve(board: &mut Board, player: Player, _time_limit: u64) -> (i32, usize, usize) {
+        A::solve(board, player, _time_limit)
     }
 }
