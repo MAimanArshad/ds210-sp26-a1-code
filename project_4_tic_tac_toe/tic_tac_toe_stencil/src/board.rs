@@ -125,79 +125,79 @@ impl Board {
         return score;
     }
 
-    pub fn heuristic_evaluation(board: &Board) -> i32 {
+    pub fn heuristic_evaluation(&self) -> i32 {
         let mut score = 0;
-        let n = board.cells.len();
+        let n = self.cells.len();
         for i in 0..n {
             for j in 0..n {
                 // 3's
                 // Row
                 if j + 2 < n {
                     score += Self::eval3([
-                        &board.cells[i][j],
-                        &board.cells[i][j + 1],
-                        &board.cells[i][j + 2],
+                        &self.cells[i][j],
+                        &self.cells[i][j + 1],
+                        &self.cells[i][j + 2],
                     ]);
                 }
                 // Col
                 if i + 2 < n {
                     score += Self::eval3([
-                        &board.cells[i][j],
-                        &board.cells[i + 1][j],
-                        &board.cells[i + 2][j],
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j],
+                        &self.cells[i + 2][j],
                     ]);
                 }
                 // Diag going right
                 if i + 2 < n && j + 2 < n {
                     score += Self::eval3([
-                        &board.cells[i][j],
-                        &board.cells[i + 1][j + 1],
-                        &board.cells[i + 2][j + 2],
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j + 1],
+                        &self.cells[i + 2][j + 2],
                     ]);
                 }
                 // Diag going left
                 if i + 2 < n && j >= 2 {
                     score += Self::eval3([
-                        &board.cells[i][j],
-                        &board.cells[i + 1][j - 1],
-                        &board.cells[i + 2][j - 2],
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j - 1],
+                        &self.cells[i + 2][j - 2],
                     ]);
                 }
                 // 4's
                 // Row
                 if j + 3 < n {
                     score += Self::eval4([
-                        &board.cells[i][j],
-                        &board.cells[i][j + 1],
-                        &board.cells[i][j + 2],
-                        &board.cells[i][j + 3],
+                        &self.cells[i][j],
+                        &self.cells[i][j + 1],
+                        &self.cells[i][j + 2],
+                        &self.cells[i][j + 3],
                     ]);
                 }
                 // Col
                 if i + 3 < n {
                     score += Self::eval4([
-                        &board.cells[i][j],
-                        &board.cells[i + 1][j],
-                        &board.cells[i + 2][j],
-                        &board.cells[i + 3][j],
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j],
+                        &self.cells[i + 2][j],
+                        &self.cells[i + 3][j],
                     ]);
                 }
                 // Diag going right
                 if i + 3 < n && j + 3 < n {
                     score += Self::eval4([
-                        &board.cells[i][j],
-                        &board.cells[i + 1][j + 1],
-                        &board.cells[i + 2][j + 2],
-                        &board.cells[i + 3][j + 3],
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j + 1],
+                        &self.cells[i + 2][j + 2],
+                        &self.cells[i + 3][j + 3],
                     ]);
                 }
                 // Diag going left
                 if i + 3 < n && j >= 3 {
                     score += Self::eval4([
-                        &board.cells[i][j],
-                        &board.cells[i + 1][j - 1],
-                        &board.cells[i + 2][j - 2],
-                        &board.cells[i + 3][j - 3],
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j - 1],
+                        &self.cells[i + 2][j - 2],
+                        &self.cells[i + 3][j - 3],
                     ]);
                 }
             }
