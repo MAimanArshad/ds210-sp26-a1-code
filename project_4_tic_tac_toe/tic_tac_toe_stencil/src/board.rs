@@ -212,6 +212,7 @@ impl Board {
             match c {
                 Cell::X => x += 1,
                 Cell::O => o += 1,
+                Cell::Empty => {},
                 _ => {}
             }
         }
@@ -236,6 +237,7 @@ impl Board {
             match c {
                 Cell::X => x += 1,
                 Cell::O => o += 1,
+                Cell::Empty => {},
                 _ => {}
             }
         }
