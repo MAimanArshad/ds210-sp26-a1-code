@@ -16,12 +16,14 @@ impl Agent for SolutionAgent {
             }
         else {
             let moves = board.moves();
-            let mut exp_board = board.clone();
             let mut scored: Vec<(i32, usize, usize)> = vec![];
+            //let mut exp_board = board.clone();
             for step in moves{
-                exp_board.apply_move(step, player);
-                let score = SolutionAgent::solve(&mut exp_board, player.flip(), _time_limit);
-                exp_board.undo_move(step, player);
+                board.apply_move(step, player);
+                let score = SolutionAgent::solve(board, player.flip(), _time_limit);
+                //let score = SolutionAgent::solve(&mut exp_board, player.flip(), _time_limit);
+                board.undo_move(step, player);
+                //exp_board.undo_move(step, player);
                 scored.push((score.0, step.0, step.1));
             }
             if player == Player::X {
