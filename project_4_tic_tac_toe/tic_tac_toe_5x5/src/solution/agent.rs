@@ -16,7 +16,6 @@ impl Agent for SolutionAgent {
    }
 }
 
-
 fn minimax(board: &mut Board, player: Player, depth: usize) -> (i32, usize, usize) {
    if board.game_over() {
        return (board.score(), 0, 0);
