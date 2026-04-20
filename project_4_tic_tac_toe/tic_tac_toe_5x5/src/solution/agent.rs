@@ -62,3 +62,4 @@ fn minimax(board: &mut Board, player: Player, depth: usize, mut alpha: i32, mut 
        (best_score, best_move.0, best_move.1)
    }
 }
+
