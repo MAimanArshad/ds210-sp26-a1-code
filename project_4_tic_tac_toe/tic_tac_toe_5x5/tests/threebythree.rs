@@ -3,7 +3,7 @@ use tic_tac_toe_5x5::solution::agent::SolutionAgent;
 use tic_tac_toe_stencil::agents::{RandomAgent, TestAgent, FirstMoveAgent};
 use tic_tac_toe_stencil::{game_loop, Outcome};
 
-const TIME_LIMIT: u64 = 4000;
+const TIME_LIMIT: u64 = 2000;
 
 #[test]
 fn beats_first_as_x_3x3() {
