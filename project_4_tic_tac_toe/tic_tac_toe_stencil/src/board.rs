@@ -125,6 +125,136 @@ impl Board {
         return score;
     }
 
+    pub fn heuristic_evaluation(&self) -> i32 {
+        let mut score = 0;
+        let n = self.cells.len();
+        for i in 0..n {
+            for j in 0..n {
+                // 3's
+                // Row
+                if j + 2 < n {
+                    score += Self::eval3([
+                        &self.cells[i][j],
+                        &self.cells[i][j + 1],
+                        &self.cells[i][j + 2],
+                    ]);
+                }
+                // Col
+                if i + 2 < n {
+                    score += Self::eval3([
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j],
+                        &self.cells[i + 2][j],
+                    ]);
+                }
+                // Diag going right
+                if i + 2 < n && j + 2 < n {
+                    score += Self::eval3([
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j + 1],
+                        &self.cells[i + 2][j + 2],
+                    ]);
+                }
+                // Diag going left
+                if i + 2 < n && j >= 2 {
+                    score += Self::eval3([
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j - 1],
+                        &self.cells[i + 2][j - 2],
+                    ]);
+                }
+                // 4's
+                // Row
+                if j + 3 < n {
+                    score += Self::eval4([
+                        &self.cells[i][j],
+                        &self.cells[i][j + 1],
+                        &self.cells[i][j + 2],
+                        &self.cells[i][j + 3],
+                    ]);
+                }
+                // Col
+                if i + 3 < n {
+                    score += Self::eval4([
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j],
+                        &self.cells[i + 2][j],
+                        &self.cells[i + 3][j],
+                    ]);
+                }
+                // Diag going right
+                if i + 3 < n && j + 3 < n {
+                    score += Self::eval4([
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j + 1],
+                        &self.cells[i + 2][j + 2],
+                        &self.cells[i + 3][j + 3],
+                    ]);
+                }
+                // Diag going left
+                if i + 3 < n && j >= 3 {
+                    score += Self::eval4([
+                        &self.cells[i][j],
+                        &self.cells[i + 1][j - 1],
+                        &self.cells[i + 2][j - 2],
+                        &self.cells[i + 3][j - 3],
+                    ]);
+                }
+            }
+        }
+        score
+    }
+
+    fn eval3(segment: [&Cell; 3]) -> i32 {
+        let mut x = 0;
+        let mut o = 0;
+        for c in segment {
+            match c {
+                Cell::X => x += 1,
+                Cell::O => o += 1,
+                Cell::Empty => {},
+                _ => {}
+            }
+        }
+        if x > 0 && o > 0 {
+            return 0;
+        }
+        match (x, o) {
+            (3, 0) => 10,
+            (2, 0) => 5,
+            (1, 0) => 2,
+            (0, 3) => -10,
+            (0, 2) => -5,
+            (0, 1) => -2,
+            _ => 0,
+        }
+    }
+
+    fn eval4(segment: [&Cell; 4]) -> i32 {
+        let mut x = 0;
+        let mut o = 0;
+        for c in segment {
+            match c {
+                Cell::X => x += 1,
+                Cell::O => o += 1,
+                Cell::Empty => {},
+                _ => {}
+            }
+        }
+        if x > 0 && o > 0 {
+            return 0;
+        }
+        match (x, o) {
+            (4, 0) => 20,
+            (3, 0) => 10,
+            (2, 0) => 5,
+            (0, 4) => -20,
+            (0, 3) => -10,
+            (0, 2) => -5,
+            _ => 0,
+        }
+    }
+
     // Apply the given move to the board.
     // This modifies the board, it does not copy it.
     // To ensure independent moves do not interfer with each other in your min max
