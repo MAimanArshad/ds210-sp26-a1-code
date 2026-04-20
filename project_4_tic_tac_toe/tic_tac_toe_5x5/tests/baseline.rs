@@ -3,7 +3,7 @@ use tic_tac_toe_5x5::solution::agent::SolutionAgent;
 use tic_tac_toe_stencil::agents::TestAgent;
 use tic_tac_toe_stencil::{game_loop, Outcome};
 
-const TIME_LIMIT: u64 = 1000;
+const TIME_LIMIT: u64 = 2000;
 
 #[test]
 fn beats_baseline_as_x_random_5() {

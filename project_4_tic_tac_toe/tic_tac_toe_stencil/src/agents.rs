@@ -2,7 +2,7 @@ use crate::board::{Board, Cell};
 use crate::color;
 use crate::player::Player;
 
-// Agent trait that students will implement for their solutions.
+
 pub trait Agent {
     // Must return (score, x coordinate of move, y coordinate of move).
     fn solve(board: &mut Board, player: Player, time_limit: u64) -> (i32, usize, usize);
