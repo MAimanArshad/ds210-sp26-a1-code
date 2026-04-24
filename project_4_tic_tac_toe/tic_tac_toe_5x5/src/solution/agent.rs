@@ -8,7 +8,9 @@ use tic_tac_toe_stencil::player::Player;
 const INF: i32 = 1_000_000_000;
 const TERMINAL_WEIGHT: i32 = 100_000;
 const CURRENT_SCORE_WEIGHT: i32 = 1_000;
-const QUIESCENCE_DEPTH: i32 = 2;
+const QUIESCENCE_DEPTH: i32 = 3;
+const MAX_CELLS: usize = 25;
+const PV_BONUS: i32 = 1_000_000;
 
 type Move = (usize, usize);
 type Pattern = [(usize, usize); 3];
@@ -17,30 +19,37 @@ pub struct SolutionAgent {}
 
 impl Agent for SolutionAgent {
     fn solve(board: &mut Board, player: Player, time_limit: u64) -> (i32, usize, usize) {
-        let moves = board.moves();
-        if moves.is_empty() {
+        let patterns = generate_patterns(board.get_cells().len());
+        let analysis = analyze(board, &patterns);
+        if analysis.empty_count == 0 {
             return (0, 0, 0);
         }
-        if moves.len() == 1 {
-            let m = moves[0];
-            return (0, m.0, m.1);
+        if analysis.empty_count == 1 {
+            let mv = analysis.empty_cells[0];
+            return (0, mv.0, mv.1);
         }
-
-        let n = board.get_cells().len();
-        let patterns = generate_patterns(n);
 
         let safety_ms = if time_limit > 60 { 25 } else { 1 };
         let deadline = Instant::now() + Duration::from_millis(time_limit.saturating_sub(safety_ms));
 
-        // Always keep a legal fallback ready.
-        let ordered = order_moves(board, &moves, player, player, &patterns);
-        let mut best_move = ordered[0].1;
-        let mut best_value = 0;
+        let mut fallback = analysis.empty_cells[0];
+        let mut fallback_priority = -INF;
+        for i in 0..analysis.empty_count {
+            let mv = analysis.empty_cells[i];
+            let p = move_priority(&analysis, mv, player);
+            if p > fallback_priority {
+                fallback_priority = p;
+                fallback = mv;
+            }
+        }
 
-        let max_depth = moves.len() as i32;
+        let mut best_move = fallback;
+        let mut best_value = 0;
         let mut depth = 1;
+        let max_depth = analysis.empty_count as i32;
+
         while depth <= max_depth && Instant::now() < deadline {
-            match search_root(board, player, depth, deadline, &patterns) {
+            match search_root(board, player, depth, deadline, &patterns, Some(best_move)) {
                 Some((value, mv)) => {
                     best_value = value;
                     best_move = mv;
@@ -60,22 +69,23 @@ fn search_root(
     depth: i32,
     deadline: Instant,
     patterns: &[Pattern],
+    pv_move: Option<Move>,
 ) -> Option<(i32, Move)> {
     if Instant::now() >= deadline {
         return None;
     }
 
-    let moves = board.moves();
-    let ordered = order_moves(board, &moves, root, root, patterns);
+    let analysis = analyze(board, patterns);
+    let mut ordered = ordered_moves(&analysis, root, pv_move);
 
     let mut alpha = -INF;
     let beta = INF;
     let mut best_value = -INF;
-    let mut best_move = ordered[0].1;
+    let mut best_move = ordered[0];
 
-    for &(_, mv) in &ordered {
+    for mv in ordered.drain(..) {
         board.apply_move(mv, root);
-        let value = alphabeta(board, depth - 1, 0, alpha, beta, root.flip(), root, deadline, patterns)?;
+        let value = alphabeta(board, depth - 1, 0, alpha, beta, root.flip(), root, deadline, patterns, None)?;
         board.undo_move(mv, root);
 
         if value > best_value {
@@ -98,48 +108,64 @@ fn alphabeta(
     root: Player,
     deadline: Instant,
     patterns: &[Pattern],
+    pv_move: Option<Move>,
 ) -> Option<i32> {
     if Instant::now() >= deadline {
         return None;
     }
 
-    if board.game_over() {
-        return Some(terminal_eval(board, root));
+    let analysis = analyze(board, patterns);
+
+    if analysis.empty_count == 0 {
+        return Some(terminal_eval_from_score(analysis.score_diff, root));
     }
 
-    let mut moves = if depth > 0 {
-        board.moves()
-    } else {
-        urgent_moves(board, patterns)
-    };
-
     if depth == 0 {
-        if qdepth >= QUIESCENCE_DEPTH || moves.is_empty() {
-            return Some(heuristic(board, root, turn, patterns));
+        let urgent = urgent_moves(&analysis);
+        if qdepth >= QUIESCENCE_DEPTH || urgent.is_empty() {
+            return Some(heuristic_from_analysis(&analysis, root, turn));
+        }
+
+        let ordered = ordered_subset_moves(&analysis, &urgent, turn, pv_move);
+
+        if turn == root {
+            let mut best = -INF;
+            for mv in ordered {
+                board.apply_move(mv, turn);
+                let value = alphabeta(board, 0, qdepth + 1, alpha, beta, turn.flip(), root, deadline, patterns, None)?;
+                board.undo_move(mv, turn);
+
+                best = max(best, value);
+                alpha = max(alpha, best);
+                if alpha >= beta {
+                    break;
+                }
+            }
+            return Some(best);
+        } else {
+            let mut best = INF;
+            for mv in ordered {
+                board.apply_move(mv, turn);
+                let value = alphabeta(board, 0, qdepth + 1, alpha, beta, turn.flip(), root, deadline, patterns, None)?;
+                board.undo_move(mv, turn);
+
+                best = min(best, value);
+                beta = min(beta, best);
+                if alpha >= beta {
+                    break;
+                }
+            }
+            return Some(best);
         }
     }
 
-    if moves.is_empty() {
-        return Some(terminal_eval(board, root));
-    }
-
-    let ordered = order_moves(board, &moves, turn, root, patterns);
+    let ordered = ordered_moves(&analysis, turn, pv_move);
 
     if turn == root {
         let mut best = -INF;
-        for &(_, mv) in &ordered {
+        for mv in ordered {
             board.apply_move(mv, turn);
-            let value = alphabeta(
-                board,
-                if depth > 0 { depth - 1 } else { 0 },
-                if depth > 0 { 0 } else { qdepth + 1 },
-                alpha,
-                beta,
-                turn.flip(),
-                root,
-                deadline,
-                patterns,
-            )?;
+            let value = alphabeta(board, depth - 1, 0, alpha, beta, turn.flip(), root, deadline, patterns, None)?;
             board.undo_move(mv, turn);
 
             best = max(best, value);
@@ -151,19 +177,9 @@ fn alphabeta(
         Some(best)
     } else {
         let mut best = INF;
-        for &(_, mv) in &ordered {
+        for mv in ordered {
             board.apply_move(mv, turn);
-            let value = alphabeta(
-                board,
-                if depth > 0 { depth - 1 } else { 0 },
-                if depth > 0 { 0 } else { qdepth + 1 },
-                alpha,
-                beta,
-                turn.flip(),
-                root,
-                deadline,
-                patterns,
-            )?;
+            let value = alphabeta(board, depth - 1, 0, alpha, beta, turn.flip(), root, deadline, patterns, None)?;
             board.undo_move(mv, turn);
 
             best = min(best, value);
@@ -176,45 +192,86 @@ fn alphabeta(
     }
 }
 
-fn order_moves(
-    board: &mut Board,
-    moves: &[Move],
-    mover: Player,
-    root: Player,
-    patterns: &[Pattern],
-) -> Vec<(i32, Move)> {
-    let before = board.score();
-    let mut scored = Vec::with_capacity(moves.len());
+fn ordered_moves(analysis: &Analysis, mover: Player, pv_move: Option<Move>) -> Vec<Move> {
+    let mut scored = Vec::with_capacity(analysis.empty_count);
 
-    for &mv in moves {
-        board.apply_move(mv, mover);
-        let after = board.score();
-        let h = heuristic(board, root, mover.flip(), patterns);
-        board.undo_move(mv, mover);
-
-        let point_swing = match mover {
-            Player::X => after - before,
-            Player::O => before - after,
-        };
-
-        let priority = h + 20_000 * point_swing;
+    for i in 0..analysis.empty_count {
+        let mv = analysis.empty_cells[i];
+        let mut priority = move_priority(analysis, mv, mover);
+        if Some(mv) == pv_move {
+            priority += PV_BONUS;
+        }
         scored.push((priority, mv));
     }
 
     scored.sort_by(|a, b| b.0.cmp(&a.0));
-    scored
+    scored.into_iter().map(|(_, mv)| mv).collect()
 }
 
-fn urgent_moves(board: &Board, patterns: &[Pattern]) -> Vec<Move> {
-    let a = analyze(board, patterns);
+fn ordered_subset_moves(
+    analysis: &Analysis,
+    moves: &[Move],
+    mover: Player,
+    pv_move: Option<Move>,
+) -> Vec<Move> {
+    let mut scored = Vec::with_capacity(moves.len());
+
+    for &mv in moves {
+        let mut priority = move_priority(analysis, mv, mover);
+        if Some(mv) == pv_move {
+            priority += PV_BONUS;
+        }
+        scored.push((priority, mv));
+    }
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.into_iter().map(|(_, mv)| mv).collect()
+}
+
+fn move_priority(analysis: &Analysis, mv: Move, mover: Player) -> i32 {
+    let idx = index(mv.0, mv.1, analysis.n);
+
+    let (my_u, opp_u, my_v, opp_v, my_w, opp_w) = match mover {
+        Player::X => (
+            analysis.ux[idx],
+            analysis.uo[idx],
+            analysis.vx[idx],
+            analysis.vo[idx],
+            analysis.wx[idx],
+            analysis.wo[idx],
+        ),
+        Player::O => (
+            analysis.uo[idx],
+            analysis.ux[idx],
+            analysis.vo[idx],
+            analysis.vx[idx],
+            analysis.wo[idx],
+            analysis.wx[idx],
+        ),
+    };
+
+    let contested = my_u + opp_u;
+    let live_total = my_w + opp_w;
+
+    30_000 * my_u
+        + 24_000 * opp_u
+        + 7_000 * (contested >= 2) as i32
+        + 2_400 * my_v
+        + 1_300 * opp_v
+        + 140 * (my_w - opp_w)
+        + 25 * live_total * live_total
+}
+
+fn urgent_moves(analysis: &Analysis) -> Vec<Move> {
     let mut urgent = Vec::new();
 
-    for &(r, c) in &a.empty_cells {
-        let idx = index(r, c, a.n);
-        let ux = a.ux[idx];
-        let uo = a.uo[idx];
-        let vx = a.vx[idx];
-        let vo = a.vo[idx];
+    for i in 0..analysis.empty_count {
+        let mv = analysis.empty_cells[i];
+        let idx = index(mv.0, mv.1, analysis.n);
+        let ux = analysis.ux[idx];
+        let uo = analysis.uo[idx];
+        let vx = analysis.vx[idx];
+        let vo = analysis.vo[idx];
 
         if ux > 0
             || uo > 0
@@ -224,43 +281,46 @@ fn urgent_moves(board: &Board, patterns: &[Pattern]) -> Vec<Move> {
             || (ux > 0 && vx >= 2)
             || (uo > 0 && vo >= 2)
         {
-            urgent.push((r, c));
+            urgent.push(mv);
         }
     }
 
     urgent
 }
 
-fn terminal_eval(board: &Board, root: Player) -> i32 {
-    let value = board.score() * TERMINAL_WEIGHT;
+fn terminal_eval_from_score(score_diff: i32, root: Player) -> i32 {
+    let value = score_diff * TERMINAL_WEIGHT;
     if root == Player::X { value } else { -value }
 }
 
-fn heuristic(board: &Board, root: Player, to_move: Player, patterns: &[Pattern]) -> i32 {
-    let a = analyze(board, patterns);
-
+fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -> i32 {
     let mut pressure_x = 0;
     let mut pressure_o = 0;
     let mut fork_x = 0;
     let mut fork_o = 0;
     let mut best_x = 0;
     let mut best_o = 0;
+    let mut cut_x = 0;
+    let mut cut_o = 0;
+    let mut hot_x = 0;
+    let mut hot_o = 0;
 
-    for &(r, c) in &a.empty_cells {
-        let idx = index(r, c, a.n);
+    for i in 0..analysis.empty_count {
+        let (r, c) = analysis.empty_cells[i];
+        let idx = index(r, c, analysis.n);
 
-        let ux = a.ux[idx];
-        let uo = a.uo[idx];
-        let vx = a.vx[idx];
-        let vo = a.vo[idx];
-        let wx = a.wx[idx];
-        let wo = a.wo[idx];
+        let ux = analysis.ux[idx];
+        let uo = analysis.uo[idx];
+        let vx = analysis.vx[idx];
+        let vo = analysis.vo[idx];
+        let wx = analysis.wx[idx];
+        let wo = analysis.wo[idx];
 
-        pressure_x += 18 * ux * ux + 7 * vx * vx + 14 * ux * vx + wx * wx;
-        pressure_o += 18 * uo * uo + 7 * vo * vo + 14 * uo * vo + wo * wo;
+        pressure_x += 22 * ux * ux + 9 * vx * vx + 17 * ux * vx + wx * wx;
+        pressure_o += 22 * uo * uo + 9 * vo * vo + 17 * uo * vo + wo * wo;
 
         if ux >= 2 {
-            fork_x += 3;
+            fork_x += 4;
         }
         if ux >= 1 && vx >= 2 {
             fork_x += 2;
@@ -270,7 +330,7 @@ fn heuristic(board: &Board, root: Player, to_move: Player, patterns: &[Pattern])
         }
 
         if uo >= 2 {
-            fork_o += 3;
+            fork_o += 4;
         }
         if uo >= 1 && vo >= 2 {
             fork_o += 2;
@@ -279,35 +339,63 @@ fn heuristic(board: &Board, root: Player, to_move: Player, patterns: &[Pattern])
             fork_o += 1;
         }
 
+        if ux >= 2 || (ux >= 1 && vx >= 2) || wx >= 5 {
+            hot_x += 1;
+        }
+        if uo >= 2 || (uo >= 1 && vo >= 2) || wo >= 5 {
+            hot_o += 1;
+        }
+
         let contested = ux + uo;
-        let swing_x = 60 * ux + 45 * uo + 12 * vx + 4 * (wx - wo) + 25 * contested * contested;
-        let swing_o = 60 * uo + 45 * ux + 12 * vo + 4 * (wo - wx) + 25 * contested * contested;
+        cut_x += uo * (2 * uo + vo + contested + 1);
+        cut_o += ux * (2 * ux + vx + contested + 1);
+
+        let swing_x = 72 * ux + 58 * uo + 15 * vx + 5 * (wx - wo) + 30 * contested * contested;
+        let swing_o = 72 * uo + 58 * ux + 15 * vo + 5 * (wo - wx) + 30 * contested * contested;
 
         best_x = max(best_x, swing_x);
         best_o = max(best_o, swing_o);
     }
 
-    let empties = a.empty_cells.len() as i32;
-    let playable = max(a.playable, 1);
+    let empties = analysis.empty_count as i32;
+    let playable = max(analysis.playable, 1);
     let empty_pct = 100 * empties / playable;
 
-    let (w2, w1, wp, wf, wi) = if empty_pct > 60 {
-        (140, 20, 1, 80, 1)
+    let (w2, w1, wp, wf, wc, wd, ws, own_now, opp_now, own_wait, opp_wait, hot_penalty, shield_bonus) = if empty_pct > 60 {
+        (160, 26, 1, 95, 45, 14, 24, 2, 1, 1, 2, 18, 3)
     } else if empty_pct > 30 {
-        (220, 30, 2, 120, 1)
+        (250, 36, 2, 145, 62, 10, 20, 3, 2, 1, 4, 28, 4)
     } else {
-        (320, 40, 3, 180, 2)
+        (370, 48, 3, 220, 82, 6, 14, 4, 3, 2, 5, 36, 5)
     };
 
-    let eval_x = CURRENT_SCORE_WEIGHT * a.score_diff
-        + w2 * (a.live2_x - a.live2_o)
-        + w1 * (a.live1_x - a.live1_o)
+    let base_eval_x = CURRENT_SCORE_WEIGHT * analysis.score_diff
+        + w2 * (analysis.live2_x - analysis.live2_o)
+        + w1 * (analysis.live1_x - analysis.live1_o)
         + wp * (pressure_x - pressure_o)
         + wf * (fork_x - fork_o)
-        + match to_move {
-            Player::X => wi * (best_x - best_o / 2),
-            Player::O => wi * (best_x / 2 - best_o),
-        };
+        + wc * (cut_x - cut_o)
+        + wd * (analysis.owned_degree_x - analysis.owned_degree_o)
+        + ws * (analysis.span_x - analysis.span_o);
+
+    let tempo_for_root = match root {
+        Player::X => {
+            if to_move == Player::X {
+                own_now * best_x - opp_now * best_o / 2 + shield_bonus * cut_x - hot_penalty * hot_o
+            } else {
+                own_wait * best_x / 2 - opp_wait * best_o + 2 * shield_bonus * cut_x - 2 * hot_penalty * hot_o
+            }
+        }
+        Player::O => {
+            if to_move == Player::O {
+                own_now * best_o - opp_now * best_x / 2 + shield_bonus * cut_o - hot_penalty * hot_x
+            } else {
+                own_wait * best_o / 2 - opp_wait * best_x + 2 * shield_bonus * cut_o - 2 * hot_penalty * hot_x
+            }
+        }
+    };
+
+    let eval_x = base_eval_x + if root == Player::X { tempo_for_root } else { -tempo_for_root };
 
     if root == Player::X { eval_x } else { -eval_x }
 }
@@ -320,47 +408,59 @@ struct Analysis {
     live2_o: i32,
     live1_x: i32,
     live1_o: i32,
-    empty_cells: Vec<Move>,
-    ux: Vec<i32>,
-    uo: Vec<i32>,
-    vx: Vec<i32>,
-    vo: Vec<i32>,
-    wx: Vec<i32>,
-    wo: Vec<i32>,
+    owned_degree_x: i32,
+    owned_degree_o: i32,
+    span_x: i32,
+    span_o: i32,
+    empty_cells: [Move; MAX_CELLS],
+    empty_count: usize,
+    ux: [i32; MAX_CELLS],
+    uo: [i32; MAX_CELLS],
+    vx: [i32; MAX_CELLS],
+    vo: [i32; MAX_CELLS],
+    wx: [i32; MAX_CELLS],
+    wo: [i32; MAX_CELLS],
 }
 
 fn analyze(board: &Board, patterns: &[Pattern]) -> Analysis {
     let cells = board.get_cells();
     let n = cells.len();
-    let mut playable = 0;
-    let mut empty_cells = Vec::new();
+
+    let mut analysis = Analysis {
+        n,
+        playable: 0,
+        score_diff: 0,
+        live2_x: 0,
+        live2_o: 0,
+        live1_x: 0,
+        live1_o: 0,
+        owned_degree_x: 0,
+        owned_degree_o: 0,
+        span_x: 0,
+        span_o: 0,
+        empty_cells: [(0, 0); MAX_CELLS],
+        empty_count: 0,
+        ux: [0; MAX_CELLS],
+        uo: [0; MAX_CELLS],
+        vx: [0; MAX_CELLS],
+        vo: [0; MAX_CELLS],
+        wx: [0; MAX_CELLS],
+        wo: [0; MAX_CELLS],
+    };
 
     for r in 0..n {
         for c in 0..n {
             match cells[r][c] {
                 Cell::Wall => {}
                 Cell::Empty => {
-                    playable += 1;
-                    empty_cells.push((r, c));
+                    analysis.playable += 1;
+                    analysis.empty_cells[analysis.empty_count] = (r, c);
+                    analysis.empty_count += 1;
                 }
-                _ => playable += 1,
+                _ => analysis.playable += 1,
             }
         }
     }
-
-    let size = n * n;
-    let mut score_diff = 0;
-    let mut live2_x = 0;
-    let mut live2_o = 0;
-    let mut live1_x = 0;
-    let mut live1_o = 0;
-
-    let mut ux = vec![0; size];
-    let mut uo = vec![0; size];
-    let mut vx = vec![0; size];
-    let mut vo = vec![0; size];
-    let mut wx = vec![0; size];
-    let mut wo = vec![0; size];
 
     for pattern in patterns {
         let mut x = 0;
@@ -387,73 +487,73 @@ fn analyze(board: &Board, patterns: &[Pattern]) -> Analysis {
         if blocked {
             continue;
         }
-
         if x == 3 {
-            score_diff += 1;
+            analysis.score_diff += 1;
             continue;
         }
         if o == 3 {
-            score_diff -= 1;
+            analysis.score_diff -= 1;
             continue;
         }
 
+        for &(r, c) in pattern.iter() {
+            match cells[r][c] {
+                Cell::X => analysis.owned_degree_x += 1,
+                Cell::O => analysis.owned_degree_o += 1,
+                _ => {}
+            }
+        }
+
         if o == 0 {
+            analysis.span_x += x * x;
             if x == 2 {
-                live2_x += 1;
-                for &idx in empties.iter().take(empty_count) {
-                    ux[idx] += 1;
-                    wx[idx] += 1;
+                analysis.span_x += 2;
+                analysis.live2_x += 1;
+                for i in 0..empty_count {
+                    let idx = empties[i];
+                    analysis.ux[idx] += 1;
+                    analysis.wx[idx] += 1;
                 }
             } else if x == 1 {
-                live1_x += 1;
-                for &idx in empties.iter().take(empty_count) {
-                    vx[idx] += 1;
-                    wx[idx] += 1;
+                analysis.live1_x += 1;
+                for i in 0..empty_count {
+                    let idx = empties[i];
+                    analysis.vx[idx] += 1;
+                    analysis.wx[idx] += 1;
                 }
             } else {
-                for &idx in empties.iter().take(empty_count) {
-                    wx[idx] += 1;
+                for i in 0..empty_count {
+                    analysis.wx[empties[i]] += 1;
                 }
             }
         }
 
         if x == 0 {
+            analysis.span_o += o * o;
             if o == 2 {
-                live2_o += 1;
-                for &idx in empties.iter().take(empty_count) {
-                    uo[idx] += 1;
-                    wo[idx] += 1;
+                analysis.span_o += 2;
+                analysis.live2_o += 1;
+                for i in 0..empty_count {
+                    let idx = empties[i];
+                    analysis.uo[idx] += 1;
+                    analysis.wo[idx] += 1;
                 }
             } else if o == 1 {
-                live1_o += 1;
-                for &idx in empties.iter().take(empty_count) {
-                    vo[idx] += 1;
-                    wo[idx] += 1;
+                analysis.live1_o += 1;
+                for i in 0..empty_count {
+                    let idx = empties[i];
+                    analysis.vo[idx] += 1;
+                    analysis.wo[idx] += 1;
                 }
             } else {
-                for &idx in empties.iter().take(empty_count) {
-                    wo[idx] += 1;
+                for i in 0..empty_count {
+                    analysis.wo[empties[i]] += 1;
                 }
             }
         }
     }
 
-    Analysis {
-        n,
-        playable,
-        score_diff,
-        live2_x,
-        live2_o,
-        live1_x,
-        live1_o,
-        empty_cells,
-        ux,
-        uo,
-        vx,
-        vo,
-        wx,
-        wo,
-    }
+    analysis
 }
 
 fn generate_patterns(n: usize) -> Vec<Pattern> {
