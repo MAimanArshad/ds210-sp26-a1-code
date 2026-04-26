@@ -8,9 +8,18 @@ use tic_tac_toe_stencil::player::Player;
 const INF: i32 = 1_000_000_000;
 const TERMINAL_WEIGHT: i32 = 100_000;
 const CURRENT_SCORE_WEIGHT: i32 = 1_000;
-const QUIESCENCE_DEPTH: i32 = 3;
+const QUIESCENCE_DEPTH_BASE: i32 = 2;
+const QUIESCENCE_DEPTH_FORCING: i32 = 3;
 const MAX_CELLS: usize = 25;
 const PV_BONUS: i32 = 1_000_000;
+
+const PRIORITY_MY_SCORE: i32 = 32_000;
+const PRIORITY_BLOCK: i32 = 25_000;
+const PRIORITY_CONTESTED: i32 = 8_000;
+const PRIORITY_MY_SETUP: i32 = 2_500;
+const PRIORITY_BLOCK_SETUP: i32 = 1_400;
+const PRIORITY_LIVE_DIFF: i32 = 180;
+const PRIORITY_LIVE_TOTAL: i32 = 35;
 
 type Move = (usize, usize);
 type Pattern = [(usize, usize); 3];
@@ -21,6 +30,7 @@ impl Agent for SolutionAgent {
     fn solve(board: &mut Board, player: Player, time_limit: u64) -> (i32, usize, usize) {
         let patterns = generate_patterns(board.get_cells().len());
         let analysis = analyze(board, &patterns);
+
         if analysis.empty_count == 0 {
             return (0, 0, 0);
         }
@@ -29,21 +39,10 @@ impl Agent for SolutionAgent {
             return (0, mv.0, mv.1);
         }
 
-        let safety_ms = if time_limit > 60 { 25 } else { 1 };
+        let safety_ms = if time_limit > 80 { 25 } else { 1 };
         let deadline = Instant::now() + Duration::from_millis(time_limit.saturating_sub(safety_ms));
 
-        let mut fallback = analysis.empty_cells[0];
-        let mut fallback_priority = -INF;
-        for i in 0..analysis.empty_count {
-            let mv = analysis.empty_cells[i];
-            let p = move_priority(&analysis, mv, player);
-            if p > fallback_priority {
-                fallback_priority = p;
-                fallback = mv;
-            }
-        }
-
-        let mut best_move = fallback;
+        let mut best_move = best_fallback_move(&analysis, player);
         let mut best_value = 0;
         let mut depth = 1;
         let max_depth = analysis.empty_count as i32;
@@ -63,6 +62,22 @@ impl Agent for SolutionAgent {
     }
 }
 
+fn best_fallback_move(analysis: &Analysis, mover: Player) -> Move {
+    let mut best_move = analysis.empty_cells[0];
+    let mut best_priority = -INF;
+
+    for i in 0..analysis.empty_count {
+        let mv = analysis.empty_cells[i];
+        let priority = move_priority(analysis, mv, mover);
+        if priority > best_priority {
+            best_priority = priority;
+            best_move = mv;
+        }
+    }
+
+    best_move
+}
+
 fn search_root(
     board: &mut Board,
     root: Player,
@@ -76,14 +91,14 @@ fn search_root(
     }
 
     let analysis = analyze(board, patterns);
-    let mut ordered = ordered_moves(&analysis, root, pv_move);
+    let ordered = ordered_moves(&analysis, root, pv_move);
 
     let mut alpha = -INF;
     let beta = INF;
     let mut best_value = -INF;
     let mut best_move = ordered[0];
 
-    for mv in ordered.drain(..) {
+    for mv in ordered {
         board.apply_move(mv, root);
         let value = alphabeta(board, depth - 1, 0, alpha, beta, root.flip(), root, deadline, patterns, None)?;
         board.undo_move(mv, root);
@@ -121,14 +136,19 @@ fn alphabeta(
     }
 
     if depth == 0 {
-        let urgent = urgent_moves(&analysis);
-        if qdepth >= QUIESCENCE_DEPTH || urgent.is_empty() {
+        let (urgent, forcing) = urgent_moves_info(&analysis);
+        let qlimit = if forcing {
+            QUIESCENCE_DEPTH_FORCING
+        } else {
+            QUIESCENCE_DEPTH_BASE
+        };
+
+        if qdepth >= qlimit || urgent.is_empty() {
             return Some(heuristic_from_analysis(&analysis, root, turn));
         }
 
         let ordered = ordered_subset_moves(&analysis, &urgent, turn, pv_move);
-
-        if turn == root {
+        return if turn == root {
             let mut best = -INF;
             for mv in ordered {
                 board.apply_move(mv, turn);
@@ -141,7 +161,7 @@ fn alphabeta(
                     break;
                 }
             }
-            return Some(best);
+            Some(best)
         } else {
             let mut best = INF;
             for mv in ordered {
@@ -155,8 +175,8 @@ fn alphabeta(
                     break;
                 }
             }
-            return Some(best);
-        }
+            Some(best)
+        };
     }
 
     let ordered = ordered_moves(&analysis, turn, pv_move);
@@ -204,7 +224,7 @@ fn ordered_moves(analysis: &Analysis, mover: Player, pv_move: Option<Move>) -> V
         scored.push((priority, mv));
     }
 
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
     scored.into_iter().map(|(_, mv)| mv).collect()
 }
 
@@ -224,7 +244,7 @@ fn ordered_subset_moves(
         scored.push((priority, mv));
     }
 
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.sort_unstable_by(|a, b| b.0.cmp(&a.0));
     scored.into_iter().map(|(_, mv)| mv).collect()
 }
 
@@ -253,17 +273,18 @@ fn move_priority(analysis: &Analysis, mv: Move, mover: Player) -> i32 {
     let contested = my_u + opp_u;
     let live_total = my_w + opp_w;
 
-    30_000 * my_u
-        + 24_000 * opp_u
-        + 7_000 * (contested >= 2) as i32
-        + 2_400 * my_v
-        + 1_300 * opp_v
-        + 140 * (my_w - opp_w)
-        + 25 * live_total * live_total
+    PRIORITY_MY_SCORE * my_u
+        + PRIORITY_BLOCK * opp_u
+        + PRIORITY_CONTESTED * ((contested >= 2) as i32)
+        + PRIORITY_MY_SETUP * my_v
+        + PRIORITY_BLOCK_SETUP * opp_v
+        + PRIORITY_LIVE_DIFF * (my_w - opp_w)
+        + PRIORITY_LIVE_TOTAL * live_total * live_total
 }
 
-fn urgent_moves(analysis: &Analysis) -> Vec<Move> {
+fn urgent_moves_info(analysis: &Analysis) -> (Vec<Move>, bool) {
     let mut urgent = Vec::new();
+    let mut forcing = false;
 
     for i in 0..analysis.empty_count {
         let mv = analysis.empty_cells[i];
@@ -273,19 +294,24 @@ fn urgent_moves(analysis: &Analysis) -> Vec<Move> {
         let vx = analysis.vx[idx];
         let vo = analysis.vo[idx];
 
-        if ux > 0
+        let is_urgent = ux > 0
             || uo > 0
             || ux + uo >= 2
             || vx >= 3
             || vo >= 3
             || (ux > 0 && vx >= 2)
-            || (uo > 0 && vo >= 2)
-        {
+            || (uo > 0 && vo >= 2);
+
+        if is_urgent {
             urgent.push(mv);
+        }
+
+        if ux > 0 || uo > 0 || ux + uo >= 2 {
+            forcing = true;
         }
     }
 
-    urgent
+    (urgent, forcing)
 }
 
 fn terminal_eval_from_score(score_diff: i32, root: Player) -> i32 {
@@ -316,8 +342,8 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
         let wx = analysis.wx[idx];
         let wo = analysis.wo[idx];
 
-        pressure_x += 22 * ux * ux + 9 * vx * vx + 17 * ux * vx + wx * wx;
-        pressure_o += 22 * uo * uo + 9 * vo * vo + 17 * uo * vo + wo * wo;
+        pressure_x += 20 * ux * ux + 8 * vx * vx + 16 * ux * vx + wx * wx;
+        pressure_o += 20 * uo * uo + 8 * vo * vo + 16 * uo * vo + wo * wo;
 
         if ux >= 2 {
             fork_x += 4;
@@ -350,8 +376,8 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
         cut_x += uo * (2 * uo + vo + contested + 1);
         cut_o += ux * (2 * ux + vx + contested + 1);
 
-        let swing_x = 72 * ux + 58 * uo + 15 * vx + 5 * (wx - wo) + 30 * contested * contested;
-        let swing_o = 72 * uo + 58 * ux + 15 * vo + 5 * (wo - wx) + 30 * contested * contested;
+        let swing_x = 70 * ux + 56 * uo + 14 * vx + 4 * (wx - wo) + 28 * contested * contested;
+        let swing_o = 70 * uo + 56 * ux + 14 * vo + 4 * (wo - wx) + 28 * contested * contested;
 
         best_x = max(best_x, swing_x);
         best_o = max(best_o, swing_o);
@@ -361,12 +387,12 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
     let playable = max(analysis.playable, 1);
     let empty_pct = 100 * empties / playable;
 
-    let (w2, w1, wp, wf, wc, wd, ws, own_now, opp_now, own_wait, opp_wait, hot_penalty, shield_bonus) = if empty_pct > 60 {
-        (160, 26, 1, 95, 45, 14, 24, 2, 1, 1, 2, 18, 3)
+    let (w2, w1, wp, wf, wc, wd, ws, wh) = if empty_pct > 60 {
+        (150, 24, 1, 90, 42, 12, 22, 10)
     } else if empty_pct > 30 {
-        (250, 36, 2, 145, 62, 10, 20, 3, 2, 1, 4, 28, 4)
+        (240, 34, 2, 140, 58, 9, 18, 14)
     } else {
-        (370, 48, 3, 220, 82, 6, 14, 4, 3, 2, 5, 36, 5)
+        (360, 46, 3, 210, 76, 6, 12, 18)
     };
 
     let base_eval_x = CURRENT_SCORE_WEIGHT * analysis.score_diff
@@ -376,21 +402,22 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
         + wf * (fork_x - fork_o)
         + wc * (cut_x - cut_o)
         + wd * (analysis.owned_degree_x - analysis.owned_degree_o)
-        + ws * (analysis.span_x - analysis.span_o);
+        + ws * (analysis.span_x - analysis.span_o)
+        + wh * (hot_x - hot_o);
 
     let tempo_for_root = match root {
         Player::X => {
             if to_move == Player::X {
-                own_now * best_x - opp_now * best_o / 2 + shield_bonus * cut_x - hot_penalty * hot_o
+                3 * best_x - best_o + 4 * cut_x - 10 * hot_o
             } else {
-                own_wait * best_x / 2 - opp_wait * best_o + 2 * shield_bonus * cut_x - 2 * hot_penalty * hot_o
+                best_x - 2 * best_o + 8 * cut_x - 18 * hot_o
             }
         }
         Player::O => {
             if to_move == Player::O {
-                own_now * best_o - opp_now * best_x / 2 + shield_bonus * cut_o - hot_penalty * hot_x
+                3 * best_o - best_x + 4 * cut_o - 10 * hot_x
             } else {
-                own_wait * best_o / 2 - opp_wait * best_x + 2 * shield_bonus * cut_o - 2 * hot_penalty * hot_x
+                best_o - 2 * best_x + 8 * cut_o - 18 * hot_x
             }
         }
     };
