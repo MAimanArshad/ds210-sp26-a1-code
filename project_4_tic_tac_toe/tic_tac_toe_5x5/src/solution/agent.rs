@@ -20,6 +20,9 @@ const PRIORITY_MY_SETUP: i32 = 2_500;
 const PRIORITY_BLOCK_SETUP: i32 = 1_400;
 const PRIORITY_LIVE_DIFF: i32 = 180;
 const PRIORITY_LIVE_TOTAL: i32 = 35;
+const PRIORITY_BEHIND_BLOCK_BOOST: i32 = 9_000;
+const PRIORITY_BEHIND_SETUP_DENIAL: i32 = 1_100;
+const PRIORITY_BEHIND_FORK_DENIAL: i32 = 3_500;
 
 type Move = (usize, usize);
 type Pattern = [(usize, usize); 3];
@@ -137,7 +140,7 @@ fn alphabeta(
 
     if depth == 0 {
         let (urgent, forcing) = urgent_moves_info(&analysis);
-        let qlimit = if forcing {
+        let qlimit = if forcing && urgent.len() <= 5 {
             QUIESCENCE_DEPTH_FORCING
         } else {
             QUIESCENCE_DEPTH_BASE
@@ -270,16 +273,39 @@ fn move_priority(analysis: &Analysis, mv: Move, mover: Player) -> i32 {
         ),
     };
 
+    let (my_count, opp_count) = match mover {
+        Player::X => (analysis.x_count, analysis.o_count),
+        Player::O => (analysis.o_count, analysis.x_count),
+    };
+
     let contested = my_u + opp_u;
     let live_total = my_w + opp_w;
+    let behind = my_count < opp_count;
+    let early = 100 * analysis.empty_count as i32 / max(analysis.playable, 1) > 55;
 
-    PRIORITY_MY_SCORE * my_u
+    let mut priority = PRIORITY_MY_SCORE * my_u
         + PRIORITY_BLOCK * opp_u
         + PRIORITY_CONTESTED * ((contested >= 2) as i32)
         + PRIORITY_MY_SETUP * my_v
         + PRIORITY_BLOCK_SETUP * opp_v
         + PRIORITY_LIVE_DIFF * (my_w - opp_w)
-        + PRIORITY_LIVE_TOTAL * live_total * live_total
+        + PRIORITY_LIVE_TOTAL * live_total * live_total;
+
+    // If we are the second mover, we are usually one tempo behind.
+    // In that case, blocking future forks matters more than building a cute setup.
+    if behind {
+        priority += PRIORITY_BEHIND_BLOCK_BOOST * opp_u;
+        priority += PRIORITY_BEHIND_SETUP_DENIAL * opp_v * opp_v;
+        priority += 180 * opp_v * opp_w;
+        priority += PRIORITY_BEHIND_FORK_DENIAL * ((opp_v >= 2 && opp_w >= 4) as i32);
+
+        if early {
+            priority += 80 * opp_w * opp_w;
+            priority += 700 * ((opp_v >= 3) as i32);
+        }
+    }
+
+    priority
 }
 
 fn urgent_moves_info(analysis: &Analysis) -> (Vec<Move>, bool) {
@@ -330,6 +356,8 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
     let mut cut_o = 0;
     let mut hot_x = 0;
     let mut hot_o = 0;
+    let mut future_x = 0;
+    let mut future_o = 0;
 
     for i in 0..analysis.empty_count {
         let (r, c) = analysis.empty_cells[i];
@@ -372,6 +400,9 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
             hot_o += 1;
         }
 
+        future_x += vx * vx + vx * wx + 4 * ((vx >= 2) as i32) + 4 * ((ux >= 1 && vx >= 2) as i32);
+        future_o += vo * vo + vo * wo + 4 * ((vo >= 2) as i32) + 4 * ((uo >= 1 && vo >= 2) as i32);
+
         let contested = ux + uo;
         cut_x += uo * (2 * uo + vo + contested + 1);
         cut_o += ux * (2 * ux + vx + contested + 1);
@@ -387,12 +418,12 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
     let playable = max(analysis.playable, 1);
     let empty_pct = 100 * empties / playable;
 
-    let (w2, w1, wp, wf, wc, wd, ws, wh) = if empty_pct > 60 {
-        (150, 24, 1, 90, 42, 12, 22, 10)
+    let (w2, w1, wp, wf, wc, wd, ws, wh, wfu) = if empty_pct > 60 {
+        (150, 24, 1, 90, 42, 12, 22, 10, 26)
     } else if empty_pct > 30 {
-        (240, 34, 2, 140, 58, 9, 18, 14)
+        (240, 34, 2, 140, 58, 9, 18, 14, 22)
     } else {
-        (360, 46, 3, 210, 76, 6, 12, 18)
+        (360, 46, 3, 210, 76, 6, 12, 18, 12)
     };
 
     let base_eval_x = CURRENT_SCORE_WEIGHT * analysis.score_diff
@@ -403,7 +434,8 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
         + wc * (cut_x - cut_o)
         + wd * (analysis.owned_degree_x - analysis.owned_degree_o)
         + ws * (analysis.span_x - analysis.span_o)
-        + wh * (hot_x - hot_o);
+        + wh * (hot_x - hot_o)
+        + wfu * (future_x - future_o);
 
     let tempo_for_root = match root {
         Player::X => {
@@ -423,14 +455,42 @@ fn heuristic_from_analysis(analysis: &Analysis, root: Player, to_move: Player) -
     };
 
     let eval_x = base_eval_x + if root == Player::X { tempo_for_root } else { -tempo_for_root };
+    let mut root_value = if root == Player::X { eval_x } else { -eval_x };
 
-    if root == Player::X { eval_x } else { -eval_x }
+    // Second-player correction: when the root player is behind in move count,
+    // punish positions where the first player is still growing future forks.
+    let root_behind = match root {
+        Player::X => analysis.x_count < analysis.o_count,
+        Player::O => analysis.o_count < analysis.x_count,
+    };
+
+    if root_behind {
+        let second_guard = match root {
+            Player::X => {
+                34 * (future_x - future_o)
+                    + 54 * (hot_x - hot_o)
+                    + 20 * (analysis.live1_x - analysis.live1_o)
+                    + 42 * (analysis.live2_x - analysis.live2_o)
+            }
+            Player::O => {
+                34 * (future_o - future_x)
+                    + 54 * (hot_o - hot_x)
+                    + 20 * (analysis.live1_o - analysis.live1_x)
+                    + 42 * (analysis.live2_o - analysis.live2_x)
+            }
+        };
+        root_value += second_guard;
+    }
+
+    root_value
 }
 
 struct Analysis {
     n: usize,
     playable: i32,
     score_diff: i32,
+    x_count: i32,
+    o_count: i32,
     live2_x: i32,
     live2_o: i32,
     live1_x: i32,
@@ -457,6 +517,8 @@ fn analyze(board: &Board, patterns: &[Pattern]) -> Analysis {
         n,
         playable: 0,
         score_diff: 0,
+        x_count: 0,
+        o_count: 0,
         live2_x: 0,
         live2_o: 0,
         live1_x: 0,
@@ -484,7 +546,14 @@ fn analyze(board: &Board, patterns: &[Pattern]) -> Analysis {
                     analysis.empty_cells[analysis.empty_count] = (r, c);
                     analysis.empty_count += 1;
                 }
-                _ => analysis.playable += 1,
+                Cell::X => {
+                    analysis.playable += 1;
+                    analysis.x_count += 1;
+                }
+                Cell::O => {
+                    analysis.playable += 1;
+                    analysis.o_count += 1;
+                }
             }
         }
     }
